@@ -21,16 +21,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	buff := make([]byte, 1024)
-	_, err = conn.Read(buff)
-	if err != nil {
-		fmt.Println("There was an error reading data", err.Error())
-		os.Exit(1)
+	for {
+		buff := make([]byte, 1024)
+		_, err = conn.Read(buff)
+		if err != nil {
+			fmt.Println("There was an error reading data", err.Error())
+			os.Exit(1)
+		}
+
+		_, err = conn.Write([]byte(PongResponse))
+		if err != nil {
+			fmt.Println("There was an error writing data", err.Error())
+			os.Exit(1)
+		}
 	}
 
-	_, err = conn.Write([]byte(PongResponse))
-	if err != nil {
-		fmt.Println("There was an error writing data", err.Error())
-		os.Exit(1)
-	}
 }
