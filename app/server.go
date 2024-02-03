@@ -53,11 +53,7 @@ func listenAndRespond(conn net.Conn) {
 }
 
 func parseEchoCommand(command string) (string, error) {
-	lines := strings.Split(command, "\r")
-
-	for idx, i := range lines {
-		fmt.Printf("%v: %v\n", idx, i)
-	}
+	lines := strings.Split(command, "\r\n")
 
 	if len(lines) < 5 {
 		return "", errors.New("Not a command")
