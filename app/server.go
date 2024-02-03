@@ -40,7 +40,8 @@ func listenAndRespond(conn net.Conn) {
 
 		echoCommandParam, err := parseEchoCommand(readString)
 		if err == nil {
-			_, err = conn.Write([]byte(echoCommandParam))
+			response := fmt.Sprint("$", len(echoCommandParam), "\r\n", echoCommandParam, "\r\n")
+			_, err = conn.Write([]byte(response))
 		} else {
 			_, err = conn.Write([]byte(PongResponse))
 		}
