@@ -34,7 +34,7 @@ func listenAndRespond(conn net.Conn) {
 		readBytes, err := conn.Read(buff)
 		if err != nil {
 			fmt.Println("There was an error reading data", err.Error())
-			os.Exit(1)
+			return
 		}
 
 		readString := string(buff)[0:readBytes]
