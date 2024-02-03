@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 const PingMessage = "*1\r\n$4\r\nping\r\n"
@@ -29,16 +31,42 @@ func main() {
 func listenAndRespond(conn net.Conn) {
 	for {
 		buff := make([]byte, 1024)
-		_, err := conn.Read(buff)
+		readBytes, err := conn.Read(buff)
 		if err != nil {
 			fmt.Println("There was an error reading data", err.Error())
 			os.Exit(1)
 		}
 
-		_, err = conn.Write([]byte(PongResponse))
+		readString := string(buff)[0:readBytes]
+
+		echoCommandParam, err := parseEchoCommand(readString)
+		if err == nil {
+			_, err = conn.Write([]byte(echoCommandParam))
+		} else {
+			fmt.Println(err)
+			_, err = conn.Write([]byte(PongResponse))
+		}
 		if err != nil {
 			fmt.Println("There was an error writing data", err.Error())
 			os.Exit(1)
 		}
 	}
+}
+
+func parseEchoCommand(command string) (string, error) {
+	lines := strings.Split(command, "\r")
+
+	for idx, i := range lines {
+		fmt.Printf("%v: %v\n", idx, i)
+	}
+
+	if len(lines) < 5 {
+		return "", errors.New("Not a command")
+	}
+
+	if lines[2] != "ECHO" {
+		return "", errors.New("Not an ECHO command")
+	}
+
+	return lines[4], nil
 }
