@@ -33,7 +33,6 @@ func listenAndRespond(conn net.Conn) {
 		buff := make([]byte, 1024)
 		readBytes, err := conn.Read(buff)
 		if err != nil {
-			fmt.Println("There was an error reading data", err.Error())
 			return
 		}
 
@@ -54,10 +53,6 @@ func listenAndRespond(conn net.Conn) {
 
 func parseEchoCommand(command string) (string, error) {
 	lines := strings.Split(command, "\r\n")
-
-	if len(lines) < 5 {
-		return "", errors.New("Not a command")
-	}
 
 	if lines[2] != "ECHO" {
 		return "", errors.New("Not an ECHO command")
