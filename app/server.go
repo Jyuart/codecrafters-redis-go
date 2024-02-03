@@ -43,7 +43,6 @@ func listenAndRespond(conn net.Conn) {
 		if err == nil {
 			_, err = conn.Write([]byte(echoCommandParam))
 		} else {
-			fmt.Println(err)
 			_, err = conn.Write([]byte(PongResponse))
 		}
 		if err != nil {
