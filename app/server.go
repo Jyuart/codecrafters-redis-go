@@ -54,7 +54,7 @@ func listenAndRespond(conn net.Conn) {
 func parseEchoCommand(command string) (string, error) {
 	lines := strings.Split(command, "\r\n")
 
-	if lines[2] != "ECHO" {
+	if lines[2] != "echo" {
 		return "", errors.New("Not an ECHO command")
 	}
 
