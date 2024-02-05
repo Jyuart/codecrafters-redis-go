@@ -98,6 +98,6 @@ func parseEchoCommand(unparsedCommand string) (Command, error) {
 	case "get":
 		return Command{commandType: GET, params: []string{ lines[4] }}, nil
 	default:
-		return Command{}, errors.ErrUnsupported
+		return Command{}, nil
 	}
 }
