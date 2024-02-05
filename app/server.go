@@ -64,11 +64,11 @@ func listenAndRespond(conn net.Conn) {
 			case SET:
 				key := command.params[0]
 				storage[key] = command.params[1]
-				response = "*1\r\n$2\r\nOK\r\n"
+				response = "+OK\r\n"
 			case GET:
 				key := command.params[0]
 				value := storage[key]
-				response = fmt.Sprint("*2\r\n", "$", len(value), "\r\n", value, "\r\n")
+				response = fmt.Sprint("$", len(value), "\r\n", value, "\r\n")
 			}
 
 			_, err = conn.Write([]byte(response))
