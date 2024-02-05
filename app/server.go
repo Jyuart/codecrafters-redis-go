@@ -86,7 +86,7 @@ func listenAndRespond(conn net.Conn) {
 func parseCommand(unparsedCommand string) (Command, error) {
 	lines := strings.Split(unparsedCommand, "\r\n")
 
-	if len(lines) < 3 {
+	if len(lines) < 5 {
 		return Command{}, errors.New("Not a full command")
 	}
 
