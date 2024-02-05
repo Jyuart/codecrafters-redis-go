@@ -11,6 +11,21 @@ import (
 const PingMessage = "*1\r\n$4\r\nping\r\n"
 const PongResponse = "+PONG\r\n"
 
+type CommandType string
+
+const (
+	ECHO CommandType = "echo"
+	GET CommandType = "get"
+	SET CommandType = "set"
+)
+
+type Command struct {
+	commandType CommandType
+	params []string
+}
+
+var storage = map[string]string{}
+
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
@@ -30,21 +45,37 @@ func main() {
 
 func listenAndRespond(conn net.Conn) {
 	for {
-		buff := make([]byte, 1024)
+		buff := make([]byte, 128)
 		readBytes, err := conn.Read(buff)
 		if err != nil {
-			return
+			continue
 		}
 
 		readString := string(buff)[0:readBytes]
 
-		echoCommandParam, err := parseEchoCommand(readString)
+		command, err := parseEchoCommand(readString)
+
 		if err == nil {
-			response := fmt.Sprint("$", len(echoCommandParam), "\r\n", echoCommandParam, "\r\n")
+			var response string
+
+			switch command.commandType {
+			case ECHO:
+				response = fmt.Sprint("$", len(command.params[0]), "\r\n", command.params[0], "\r\n")
+			case SET:
+				key := command.params[0]
+				storage[key] = command.params[1]
+				response = "*1\r\n$2\r\nOK\r\n"
+			case GET:
+				key := command.params[0]
+				value := storage[key]
+				response = fmt.Sprint("*2\r\n", "$", len(value), "\r\n", value, "\r\n")
+			}
+
 			_, err = conn.Write([]byte(response))
 		} else {
 			_, err = conn.Write([]byte(PongResponse))
 		}
+
 		if err != nil {
 			fmt.Println("There was an error writing data", err.Error())
 			os.Exit(1)
@@ -52,12 +83,21 @@ func listenAndRespond(conn net.Conn) {
 	}
 }
 
-func parseEchoCommand(command string) (string, error) {
-	lines := strings.Split(command, "\r\n")
+func parseEchoCommand(unparsedCommand string) (Command, error) {
+	lines := strings.Split(unparsedCommand, "\r\n")
 
-	if lines[2] != "echo" {
-		return "", errors.New("Not an ECHO command")
+	if len(lines) < 3 {
+		return Command{}, errors.New("Not a full command")
 	}
 
-	return lines[4], nil
+	switch lines[2] {
+	case "echo":
+		return Command{commandType: ECHO, params: []string{ lines[4] }}, nil
+	case "set":
+		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}, nil
+	case "get":
+		return Command{commandType: GET, params: []string{ lines[4] }}, nil
+	default:
+		return Command{}, errors.ErrUnsupported
+	}
 }
