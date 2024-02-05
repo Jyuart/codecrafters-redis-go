@@ -53,7 +53,7 @@ func listenAndRespond(conn net.Conn) {
 
 		readString := string(buff)[0:readBytes]
 
-		command, err := parseEchoCommand(readString)
+		command, err := parseCommand(readString)
 
 		if err == nil {
 			var response string
@@ -83,7 +83,7 @@ func listenAndRespond(conn net.Conn) {
 	}
 }
 
-func parseEchoCommand(unparsedCommand string) (Command, error) {
+func parseCommand(unparsedCommand string) (Command, error) {
 	lines := strings.Split(unparsedCommand, "\r\n")
 
 	if len(lines) < 3 {
