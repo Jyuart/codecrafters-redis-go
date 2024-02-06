@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const PingMessage = "*1\r\n$4\r\nping\r\n"
 const PongResponse = "+PONG\r\n"
+const NullBulkString = "$-1\r\n"
 
 type CommandType string
 
@@ -63,12 +66,20 @@ func listenAndRespond(conn net.Conn) {
 				response = fmt.Sprint("$", len(command.params[0]), "\r\n", command.params[0], "\r\n")
 			case SET:
 				key := command.params[0]
+				if len(command.params) > 2 {
+					expireInMs, _ := strconv.Atoi(command.params[2]) 
+					time.AfterFunc(time.Duration(expireInMs) * time.Millisecond,  func() { delete(storage, key) })
+				}
 				storage[key] = command.params[1]
 				response = "+OK\r\n"
 			case GET:
 				key := command.params[0]
-				value := storage[key]
-				response = fmt.Sprint("$", len(value), "\r\n", value, "\r\n")
+				entry, ok := storage[key]
+				if ok {
+					response = fmt.Sprint("$", len(entry), "\r\n", entry, "\r\n")
+				} else {
+					response = NullBulkString
+				}
 			}
 
 			_, err = conn.Write([]byte(response))
@@ -94,6 +105,9 @@ func parseCommand(unparsedCommand string) (Command, error) {
 	case "echo":
 		return Command{commandType: ECHO, params: []string{ lines[4] }}, nil
 	case "set":
+		if len(lines) > 8 {
+			return Command{commandType: SET, params: []string{ lines[4], lines[6], lines[10] }}, nil
+		}
 		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}, nil
 	case "get":
 		return Command{commandType: GET, params: []string{ lines[4] }}, nil
