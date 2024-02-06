@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -12,11 +11,14 @@ import (
 
 const PingMessage = "*1\r\n$4\r\nping\r\n"
 const PongResponse = "+PONG\r\n"
+const OkResponse = "+OK\r\n"
+const NewLine = "\r\n"
 const NullBulkString = "$-1\r\n"
 
 type CommandType string
 
 const (
+	PING CommandType = "ping"
 	ECHO CommandType = "echo"
 	GET CommandType = "get"
 	SET CommandType = "set"
@@ -56,36 +58,34 @@ func listenAndRespond(conn net.Conn) {
 
 		readString := string(buff)[0:readBytes]
 
-		command, err := parseCommand(readString)
+		command := parseCommand(readString)
 
-		if err == nil {
-			var response string
+		var response string
 
-			switch command.commandType {
-			case ECHO:
-				response = fmt.Sprint("$", len(command.params[0]), "\r\n", command.params[0], "\r\n")
-			case SET:
-				key := command.params[0]
-				if len(command.params) > 2 {
-					expireInMs, _ := strconv.Atoi(command.params[2]) 
-					time.AfterFunc(time.Duration(expireInMs) * time.Millisecond,  func() { delete(storage, key) })
-				}
-				storage[key] = command.params[1]
-				response = "+OK\r\n"
-			case GET:
-				key := command.params[0]
-				entry, ok := storage[key]
-				if ok {
-					response = fmt.Sprint("$", len(entry), "\r\n", entry, "\r\n")
-				} else {
-					response = NullBulkString
-				}
+		switch command.commandType {
+		case PING:
+			response = PongResponse
+		case ECHO:
+			response = generateRespone(command.params[0])
+		case SET:
+			key := command.params[0]
+			if len(command.params) > 2 {
+				expireInMs, _ := strconv.Atoi(command.params[2]) 
+				time.AfterFunc(time.Duration(expireInMs) * time.Millisecond,  func() { delete(storage, key) })
 			}
-
-			_, err = conn.Write([]byte(response))
-		} else {
-			_, err = conn.Write([]byte(PongResponse))
+			storage[key] = command.params[1]
+			response = OkResponse
+		case GET:
+			key := command.params[0]
+			entry, ok := storage[key]
+			if ok {
+				response = generateRespone(entry)
+			} else {
+				response = NullBulkString
+			}
 		}
+
+		_, err = conn.Write([]byte(response))
 
 		if err != nil {
 			fmt.Println("There was an error writing data", err.Error())
@@ -94,24 +94,28 @@ func listenAndRespond(conn net.Conn) {
 	}
 }
 
-func parseCommand(unparsedCommand string) (Command, error) {
+func parseCommand(unparsedCommand string) Command {
 	lines := strings.Split(unparsedCommand, "\r\n")
 
 	if len(lines) < 5 {
-		return Command{}, errors.New("Not a full command")
+		return Command{commandType: PING}
 	}
 
 	switch lines[2] {
 	case "echo":
-		return Command{commandType: ECHO, params: []string{ lines[4] }}, nil
+		return Command{commandType: ECHO, params: []string{ lines[4] }}
 	case "set":
 		if len(lines) > 8 {
-			return Command{commandType: SET, params: []string{ lines[4], lines[6], lines[10] }}, nil
+			return Command{commandType: SET, params: []string{ lines[4], lines[6], lines[10] }}
 		}
-		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}, nil
+		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}
 	case "get":
-		return Command{commandType: GET, params: []string{ lines[4] }}, nil
+		return Command{commandType: GET, params: []string{ lines[4] }}
 	default:
-		return Command{}, nil
+		return Command{}
 	}
+}
+
+func generateRespone(response string) string {
+	return fmt.Sprint("$", len(response), NewLine, response, NewLine)
 }
