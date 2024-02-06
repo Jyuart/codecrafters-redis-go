@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"flag"
 )
 
 const PingMessage = "*1\r\n$4\r\nping\r\n"
@@ -15,6 +16,9 @@ const OkResponse = "+OK\r\n"
 const NewLine = "\r\n"
 const NullBulkString = "$-1\r\n"
 
+var Dir string
+var DbFileName string
+
 type CommandType string
 
 const (
@@ -22,6 +26,7 @@ const (
 	ECHO CommandType = "echo"
 	GET CommandType = "get"
 	SET CommandType = "set"
+	CONFIG CommandType = "config"
 )
 
 type Command struct {
@@ -32,6 +37,8 @@ type Command struct {
 var storage = map[string]string{}
 
 func main() {
+	handleCommandLineArguments()
+
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -46,6 +53,14 @@ func main() {
 
 		go listenAndRespond(conn)
 	}
+}
+
+func handleCommandLineArguments() {
+	dirFlag := flag.String("dir", "", "The directory where RDB files are stored")
+	dbFileNameFlag := flag.String("dbfilename", "", "The name of the RDB file")
+	flag.Parse()
+	Dir = *dirFlag
+	DbFileName = *dbFileNameFlag
 }
 
 func listenAndRespond(conn net.Conn) {
@@ -83,6 +98,16 @@ func listenAndRespond(conn net.Conn) {
 			} else {
 				response = NullBulkString
 			}
+		case CONFIG:
+			flagType := command.params[0]
+			flagValue := ""
+			if flagType == "dir" {
+				flagValue = Dir
+			}
+			if flagType == "dbfilename" {
+				flagValue = DbFileName
+			}
+			response = generateRespArrayResponse([]string{flagType, flagValue})
 		}
 
 		_, err = conn.Write([]byte(response))
@@ -111,6 +136,8 @@ func parseCommand(unparsedCommand string) Command {
 		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}
 	case "get":
 		return Command{commandType: GET, params: []string{ lines[4] }}
+	case "config":
+		return Command{commandType: CONFIG, params: []string { lines[6] }}
 	default:
 		return Command{}
 	}
@@ -118,4 +145,13 @@ func parseCommand(unparsedCommand string) Command {
 
 func generateRespone(response string) string {
 	return fmt.Sprint("$", len(response), NewLine, response, NewLine)
+}
+
+func generateRespArrayResponse(elements []string) string {
+	response := fmt.Sprint("*", string(len(elements)), NewLine)
+	for _, el := range elements {
+		response += fmt.Sprint("$", len(el), NewLine, el, NewLine)
+	}
+
+	return response
 }
