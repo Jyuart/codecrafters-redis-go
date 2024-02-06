@@ -136,7 +136,7 @@ func parseCommand(unparsedCommand string) Command {
 		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}
 	case "get":
 		return Command{commandType: GET, params: []string{ lines[4] }}
-	case "config":
+	case "CONFIG":
 		return Command{commandType: CONFIG, params: []string { lines[6] }}
 	default:
 		return Command{}
