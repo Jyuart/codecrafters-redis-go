@@ -152,6 +152,7 @@ func generateRespArrayResponse(elements []string) string {
 	for _, el := range elements {
 		response += fmt.Sprint("$", len(el), NewLine, el, NewLine)
 	}
+	fmt.Println(response)
 
 	return response
 }
