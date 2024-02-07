@@ -148,7 +148,7 @@ func generateRespone(response string) string {
 }
 
 func generateRespArrayResponse(elements []string) string {
-	response := fmt.Sprint("*", string(len(elements)), NewLine)
+	response := fmt.Sprint("*", len(elements), NewLine)
 	for _, el := range elements {
 		response += fmt.Sprint("$", len(el), NewLine, el, NewLine)
 	}
