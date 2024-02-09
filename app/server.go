@@ -126,7 +126,7 @@ func parseCommand(unparsedCommand string) Command {
 		return Command{commandType: PING}
 	}
 
-	switch lines[2] {
+	switch strings.ToLower(lines[2]) {
 	case "echo":
 		return Command{commandType: ECHO, params: []string{ lines[4] }}
 	case "set":
@@ -136,7 +136,7 @@ func parseCommand(unparsedCommand string) Command {
 		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}
 	case "get":
 		return Command{commandType: GET, params: []string{ lines[4] }}
-	case "CONFIG":
+	case "config":
 		return Command{commandType: CONFIG, params: []string { lines[6] }}
 	default:
 		return Command{}
