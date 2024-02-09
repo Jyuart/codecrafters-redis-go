@@ -27,6 +27,7 @@ const (
 	GET CommandType = "get"
 	SET CommandType = "set"
 	CONFIG CommandType = "config"
+	KEYS CommandType = "keys"
 )
 
 type Command struct {
@@ -74,43 +75,9 @@ func listenAndRespond(conn net.Conn) {
 		readString := string(buff)[0:readBytes]
 
 		command := parseCommand(readString)
+		commandResult := handleCommand(command)
 
-		var response string
-
-		switch command.commandType {
-		case PING:
-			response = PongResponse
-		case ECHO:
-			response = generateRespone(command.params[0])
-		case SET:
-			key := command.params[0]
-			if len(command.params) > 2 {
-				expireInMs, _ := strconv.Atoi(command.params[2]) 
-				time.AfterFunc(time.Duration(expireInMs) * time.Millisecond,  func() { delete(storage, key) })
-			}
-			storage[key] = command.params[1]
-			response = OkResponse
-		case GET:
-			key := command.params[0]
-			entry, ok := storage[key]
-			if ok {
-				response = generateRespone(entry)
-			} else {
-				response = NullBulkString
-			}
-		case CONFIG:
-			flagType := command.params[0]
-			flagValue := ""
-			if flagType == "dir" {
-				flagValue = Dir
-			}
-			if flagType == "dbfilename" {
-				flagValue = DbFileName
-			}
-			response = generateRespArrayResponse([]string{flagType, flagValue})
-		}
-
-		_, err = conn.Write([]byte(response))
+		_, err = conn.Write(commandResult)
 
 		if err != nil {
 			fmt.Println("There was an error writing data", err.Error())
@@ -119,9 +86,59 @@ func listenAndRespond(conn net.Conn) {
 	}
 }
 
-func parseCommand(unparsedCommand string) Command {
-	lines := strings.Split(unparsedCommand, "\r\n")
+func handleCommand(command Command) []byte {
+	var response string
 
+	switch command.commandType {
+	case PING:
+		response = PongResponse
+	case ECHO:
+		response = generateResponse([]string { command.params[0] }, false)
+	case SET:
+		key := command.params[0]
+		if len(command.params) > 2 {
+			expireInMs, _ := strconv.Atoi(command.params[2]) 
+			time.AfterFunc(time.Duration(expireInMs) * time.Millisecond,  func() { delete(storage, key) })
+		}
+		storage[key] = command.params[1]
+		response = OkResponse
+	case GET:
+		key := command.params[0]
+		entry, ok := storage[key]
+		if ok {
+			response = generateResponse([]string { entry }, false)
+		} else {
+			response = NullBulkString
+		}
+	case CONFIG:
+		flagType := command.params[0]
+		flagValue := ""
+		if flagType == "dir" {
+			flagValue = Dir
+		}
+		if flagType == "dbfilename" {
+			flagValue = DbFileName
+		}
+		response = generateResponse([]string{flagType, flagValue}, true)
+	case KEYS:
+		response = getRdbKeys(command)
+	}
+
+	return []byte(response)
+}
+
+func getRdbKeys(command Command) string {
+	var keys []string
+
+	// Work on reading rdb keys
+
+	return generateResponse(keys, true)
+}
+
+func parseCommand(unparsedCommand string) Command {
+	lines := strings.Split(unparsedCommand, NewLine)
+
+	// Seems like a specific CodeCrafters case
 	if len(lines) < 5 {
 		return Command{commandType: PING}
 	}
@@ -138,17 +155,18 @@ func parseCommand(unparsedCommand string) Command {
 		return Command{commandType: GET, params: []string{ lines[4] }}
 	case "config":
 		return Command{commandType: CONFIG, params: []string { lines[6] }}
+	case "keys":
+		return Command{commandType: KEYS, params: []string { lines[4] }}
 	default:
 		return Command{}
 	}
 }
 
-func generateRespone(response string) string {
-	return fmt.Sprint("$", len(response), NewLine, response, NewLine)
-}
-
-func generateRespArrayResponse(elements []string) string {
-	response := fmt.Sprint("*", len(elements), NewLine)
+func generateResponse(elements []string, respArrayFormat bool) string {
+	response := ""
+	if respArrayFormat {
+		response += fmt.Sprint("*", len(elements), NewLine)
+	}
 	for _, el := range elements {
 		response += fmt.Sprint("$", len(el), NewLine, el, NewLine)
 	}
