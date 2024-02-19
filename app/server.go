@@ -1,13 +1,15 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"flag"
+
+	"github.com/codecrafters-io/redis-starter-go/app/rdb"
 )
 
 const PingMessage = "*1\r\n$4\r\nping\r\n"
@@ -121,16 +123,19 @@ func handleCommand(command Command) []byte {
 		}
 		response = generateResponse([]string{flagType, flagValue}, true)
 	case KEYS:
-		response = getRdbKeys(command)
+		response = getRdbKeys()
 	}
 
 	return []byte(response)
 }
 
-func getRdbKeys(command Command) string {
+func getRdbKeys() string {
+
 	var keys []string
 
 	// Work on reading rdb keys
+	dbFilePath := fmt.Sprint(Dir, "/", DbFileName)
+	keys = rdb.GetKeys(dbFilePath)
 
 	return generateResponse(keys, true)
 }
@@ -170,7 +175,6 @@ func generateResponse(elements []string, respArrayFormat bool) string {
 	for _, el := range elements {
 		response += fmt.Sprint("$", len(el), NewLine, el, NewLine)
 	}
-	fmt.Println(response)
 
 	return response
 }
