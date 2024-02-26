@@ -33,7 +33,7 @@ func GetKeys(rdbFilePath string) []string {
 
 	keyLenPosition := resideDbPosition + 4
 	keyLen := int(fileData[keyLenPosition])
-	key := fileData[keyLenPosition : keyLenPosition + keyLen] 
+	key := fileData[keyLenPosition : keyLenPosition + keyLen + 1] 
 
 	return []string{ string(key) }
 }
