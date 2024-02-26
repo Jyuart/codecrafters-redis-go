@@ -130,7 +130,6 @@ func handleCommand(command Command) []byte {
 }
 
 func getRdbKeys() string {
-
 	var keys []string
 
 	// Work on reading rdb keys

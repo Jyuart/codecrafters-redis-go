@@ -1,6 +1,7 @@
 package rdb
 
 import (
+	"bytes"
 	"os"
 )
 
@@ -21,19 +22,12 @@ func GetKeys(rdbFilePath string) []string {
 	check(err)
 
 	fileData = fileData[:bytesRead]
+	resideDbPosition := bytes.IndexByte(fileData, byte(RESIZE_DB))
 
-	resideDb := byte(RESIZE_DB)
-	var resideDbPosition int
-
-	for idx, b := range fileData {
-		if b == resideDb {
-			resideDbPosition = idx
-		}
-	}
-
+	// 4 is the number of bytes between the fb op and the len of the first key
 	keyLenPosition := resideDbPosition + 4
 	keyLen := int(fileData[keyLenPosition])
-	key := fileData[keyLenPosition : keyLenPosition + keyLen + 1] 
+	key := fileData[keyLenPosition + 1 : keyLenPosition + keyLen + 1]
 
 	return []string{ string(key) }
 }
