@@ -105,13 +105,7 @@ func handleCommand(command Command) []byte {
 		storage[key] = command.params[1]
 		response = OkResponse
 	case GET:
-		key := command.params[0]
-		entry, ok := storage[key]
-		if ok {
-			response = generateResponse([]string { entry }, false)
-		} else {
-			response = NullBulkString
-		}
+		response = getKeyValue(command)
 	case CONFIG:
 		flagType := command.params[0]
 		flagValue := ""
@@ -132,11 +126,29 @@ func handleCommand(command Command) []byte {
 func getRdbKeys() string {
 	var keys []string
 
-	// Work on reading rdb keys
 	dbFilePath := fmt.Sprint(Dir, "/", DbFileName)
 	keys = rdb.GetKeys(dbFilePath)
 
 	return generateResponse(keys, true)
+}
+
+func getKeyValue(command Command) string {
+	key := command.params[0]
+	if (DbFileName == "") {
+		return getKeyFromMemory(key)
+	}
+	dbFilePath := fmt.Sprint(Dir, "/", DbFileName)
+	keyValue := rdb.GetKeyValue(dbFilePath, key)
+	return generateResponse([]string { keyValue }, true)
+}
+
+func getKeyFromMemory(key string) string {
+	entry, ok := storage[key]
+	if ok {
+		return generateResponse([]string { entry }, false)
+	} else {
+		return NullBulkString
+	}
 }
 
 func parseCommand(unparsedCommand string) Command {
