@@ -2,7 +2,6 @@ package rdb
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 )
 
@@ -37,7 +36,6 @@ func GetKeys(rdbFilePath string) []string {
 	var keys []string
 	fileData := parseFile(rdbFilePath)
 	keysLen := getKeysLen(fileData)
-	fmt.Println(keysLen)
 
 	firstKeyLenIdx := getKeysStartIdx(fileData)
 	for i := 0; i < keysLen; i++ {
