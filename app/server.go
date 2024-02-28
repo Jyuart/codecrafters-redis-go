@@ -139,7 +139,7 @@ func getKeyValue(command Command) string {
 	}
 	dbFilePath := fmt.Sprint(Dir, "/", DbFileName)
 	keyValue := rdb.GetKeyValue(dbFilePath, key)
-	return generateResponse([]string { keyValue }, true)
+	return generateResponse([]string { keyValue }, false)
 }
 
 func getKeyFromMemory(key string) string {
