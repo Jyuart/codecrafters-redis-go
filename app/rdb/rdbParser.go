@@ -2,6 +2,7 @@ package rdb
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 )
 
@@ -16,70 +17,61 @@ func check(e error) {
 
 func GetKeyValue(rdbFilePath string, key string) string {
 	fileData := parseFile(rdbFilePath)
-	resizeDbCodePosition := getOpCodePosition(fileData, RESIZE_DB)
-	keysLen := getKeysLen(string(fileData), resizeDbCodePosition)
+	keysLen := getKeysLen(fileData)
 
-	keysStartPosition := getKeysStartPosition(fileData)
+	firstKeyLenIdx := getKeysStartIdx(fileData)
 	for i := 0; i < keysLen; i++ {
-		currentKeyLen := int(fileData[keysStartPosition])
-		currentKeyEndPosition := keysStartPosition + currentKeyLen + 1
-		currentKey := fileData[keysStartPosition + 1 : currentKeyEndPosition]
-
-		currentValueLen := int(fileData[currentKeyEndPosition])
-		if string(currentKey) == (key) {
-			return string(fileData[currentKeyEndPosition + 1 : currentKeyEndPosition + 1 + currentValueLen])
+		currentKey, value := parseKeyValue(fileData, firstKeyLenIdx)
+		if currentKey == key {
+			return value
 		}
-		// 2 is the number of bytes for encoding actual key and value lengths
-		keysStartPosition += currentKeyLen + currentValueLen + 2
+
+		// 3: key_len + value_len + encoding
+		firstKeyLenIdx += len(currentKey) + len(value) + 3
 	}
 
 	return ""
 }
 
-func GetKeys2(rdbFilePath string) []string {
+func GetKeys(rdbFilePath string) []string {
 	var keys []string
 	fileData := parseFile(rdbFilePath)
-	resizeDbCodePosition := getOpCodePosition(fileData, RESIZE_DB)
-	keysLen := getKeysLen(string(fileData), resizeDbCodePosition)
+	keysLen := getKeysLen(fileData)
+	fmt.Println(keysLen)
 
-	keysStartPosition := getKeysStartPosition(fileData)
-
+	firstKeyLenIdx := getKeysStartIdx(fileData)
 	for i := 0; i < keysLen; i++ {
-		currentKeyLen := int(fileData[keysStartPosition])
-		currentKeyEndPosition := keysStartPosition + currentKeyLen + 1
-		currentKey := fileData[keysStartPosition + 1 : currentKeyEndPosition]
+		key, value := parseKeyValue(fileData, firstKeyLenIdx)
+		keys = append(keys, key)
 
-		currentValueLen := int(fileData[currentKeyEndPosition])
-		// 2 is the number of bytes for encoding actual key and value lengths
-		keysStartPosition += currentKeyLen + currentValueLen + 2
-
-		keys = append(keys, string(currentKey))
+		// 3: key_len + value_len + encoding
+		firstKeyLenIdx += len(key) + len(value) + 3
 	}
 
 	return keys
 }
 
-func GetKeys(rdbFilePath string) []string {
-	fileData := parseFile(rdbFilePath)
-	keysStartPosition := getKeysStartPosition(fileData)
-	keyLen := int(fileData[keysStartPosition])
-	key := fileData[keysStartPosition + 1 : keysStartPosition + keyLen + 1]
+func parseKeyValue(fileData []byte, keyLenIdx int) (string, string) {
+	keyLen := int(fileData[keyLenIdx])
+	keyEndIdx := keyLenIdx + keyLen + 1
+	key := string(fileData[keyLenIdx + 1 : keyEndIdx])
 
-	return []string{ string(key) }
+	valueLen := int(fileData[keyEndIdx])
+	value := string(fileData[keyEndIdx + 1 : keyEndIdx + 1 + valueLen])
+	return key, value
 }
 
-// The next byte after the resize db op code
-func getKeysLen(fileData string, resizeDbPosition int) int {
-	return int(fileData[resizeDbPosition + 1])
+// 1: -> The next byte after the resize db op code
+func getKeysLen(fileData []byte) int {
+	return int(fileData[getOpCodeIdx(fileData, RESIZE_DB) + 1])
 }
 
-// keys_len + expire_keys_len + encoding_type + first_key_len
-func getKeysStartPosition(fileData []byte) int {
-	// 4 is the number of bytes between the fb op and the len of the first key
-	return getOpCodePosition(fileData, RESIZE_DB) + 4
+// 4: keys_len + expire_keys_len + encoding_type + first_key_len
+func getKeysStartIdx(fileData []byte) int {
+	return getOpCodeIdx(fileData, RESIZE_DB) + 4
 }
 
-func getOpCodePosition(fileData []byte, opCode byte) int {
+func getOpCodeIdx(fileData []byte, opCode byte) int {
 	return bytes.IndexByte(fileData, opCode)
 }
 
@@ -87,7 +79,7 @@ func parseFile(filePath string) []byte {
 	f, err := os.Open(filePath)
 	check(err)
 
-	fileData := make([]byte, 256)
+	fileData := make([]byte, 1024)
 	bytesRead, err := f.Read(fileData)
 	check(err)
 
