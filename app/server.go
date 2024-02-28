@@ -127,7 +127,7 @@ func getRdbKeys() string {
 	var keys []string
 
 	dbFilePath := fmt.Sprint(Dir, "/", DbFileName)
-	keys = rdb.GetKeys(dbFilePath)
+	keys = rdb.GetKeys2(dbFilePath)
 
 	return generateResponse(keys, true)
 }

@@ -36,6 +36,29 @@ func GetKeyValue(rdbFilePath string, key string) string {
 	return ""
 }
 
+func GetKeys2(rdbFilePath string) []string {
+	var keys []string
+	fileData := parseFile(rdbFilePath)
+	resizeDbCodePosition := getOpCodePosition(fileData, RESIZE_DB)
+	keysLen := getKeysLen(string(fileData), resizeDbCodePosition)
+
+	keysStartPosition := getKeysStartPosition(fileData)
+
+	for i := 0; i < keysLen; i++ {
+		currentKeyLen := int(fileData[keysStartPosition])
+		currentKeyEndPosition := keysStartPosition + currentKeyLen + 1
+		currentKey := fileData[keysStartPosition + 1 : currentKeyEndPosition]
+
+		currentValueLen := int(fileData[currentKeyEndPosition])
+		// 2 is the number of bytes for encoding actual key and value lengths
+		keysStartPosition += currentKeyLen + currentValueLen + 2
+
+		keys = append(keys, string(currentKey))
+	}
+
+	return keys
+}
+
 func GetKeys(rdbFilePath string) []string {
 	fileData := parseFile(rdbFilePath)
 	keysStartPosition := getKeysStartPosition(fileData)
