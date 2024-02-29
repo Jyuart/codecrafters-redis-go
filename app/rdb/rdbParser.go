@@ -3,10 +3,14 @@ package rdb
 import (
 	"bytes"
 	"os"
+	"strconv"
+	"time"
 )
 
 const RESIZE_DB = 0xFB
 const DB_END = 0xFF
+const SECONDS_EXPIRY = 0xFD
+const MS_EXPIRY = 0xFC
 
 func check(e error) {
 	if e != nil {
@@ -17,8 +21,20 @@ func check(e error) {
 func GetKeyValue(rdbFilePath string, key string) string {
 	fileData := parseFile(rdbFilePath)
 	keysLen := getKeysLen(fileData)
+	expiryKeysLen := getExpiryKeysLen(fileData)
 
 	firstKeyLenIdx := getKeysStartIdx(fileData)
+	for i := 0; i < expiryKeysLen; i++ {
+		currentKey, value, expired := parseExpiryKeyValue(fileData, firstKeyLenIdx)
+		if currentKey == key && expired {
+			return ""
+		}
+		if currentKey == key {
+			return value
+		}
+
+	}
+
 	for i := 0; i < keysLen; i++ {
 		currentKey, value := parseKeyValue(fileData, firstKeyLenIdx)
 		if currentKey == key {
@@ -38,6 +54,7 @@ func GetKeys(rdbFilePath string) []string {
 	keysLen := getKeysLen(fileData)
 
 	firstKeyLenIdx := getKeysStartIdx(fileData)
+
 	for i := 0; i < keysLen; i++ {
 		key, value := parseKeyValue(fileData, firstKeyLenIdx)
 		keys = append(keys, key)
@@ -49,19 +66,45 @@ func GetKeys(rdbFilePath string) []string {
 	return keys
 }
 
-func parseKeyValue(fileData []byte, keyLenIdx int) (string, string) {
-	keyLen := int(fileData[keyLenIdx])
-	keyEndIdx := keyLenIdx + keyLen + 1
-	key := string(fileData[keyLenIdx + 1 : keyEndIdx])
+func parseExpiryKeyValue(fileData []byte, currIdx int) (string, string, bool) {
+	pairExpiryType := fileData[currIdx]
+	var expirationValueEndIdx int
+	expired := false
+	if pairExpiryType == SECONDS_EXPIRY {
+		expirationValueEndIdx = currIdx + 1 + 4
+		expirationTime, _ := strconv.Atoi(string(fileData[pairExpiryType+1 : expirationValueEndIdx]))
+		if int64(expirationTime) < time.Now().Unix() {
+			expired = true
+		}
+	} else {
+		expirationValueEndIdx = currIdx + 1 + 8
+		expirationTime, _ := strconv.Atoi(string(fileData[pairExpiryType+1 : expirationValueEndIdx]))
+		if int64(expirationTime) < time.Now().UnixMilli() {
+			expired = true
+		}
+	}
+	key, value := parseKeyValue(fileData, expirationValueEndIdx)
+	return key, value, expired
+}
+
+func parseKeyValue(fileData []byte, currIdx int) (string, string) {
+	keyLen := int(fileData[currIdx])
+	keyEndIdx := currIdx + keyLen + 1
+	key := string(fileData[currIdx+1 : keyEndIdx])
 
 	valueLen := int(fileData[keyEndIdx])
-	value := string(fileData[keyEndIdx + 1 : keyEndIdx + 1 + valueLen])
+	value := string(fileData[keyEndIdx+1 : keyEndIdx+1+valueLen])
 	return key, value
 }
 
 // 1: -> The next byte after the resize db op code
 func getKeysLen(fileData []byte) int {
-	return int(fileData[getOpCodeIdx(fileData, RESIZE_DB) + 1])
+	return int(fileData[getOpCodeIdx(fileData, RESIZE_DB)+1])
+}
+
+// 2: -> The second byte after the resize db op code
+func getExpiryKeysLen(fileData []byte) int {
+	return int(fileData[getOpCodeIdx(fileData, RESIZE_DB)+2])
 }
 
 // 4: keys_len + expire_keys_len + encoding_type + first_key_len
