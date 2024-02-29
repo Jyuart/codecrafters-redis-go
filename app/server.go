@@ -24,17 +24,17 @@ var DbFileName string
 type CommandType string
 
 const (
-	PING CommandType = "ping"
-	ECHO CommandType = "echo"
-	GET CommandType = "get"
-	SET CommandType = "set"
+	PING   CommandType = "ping"
+	ECHO   CommandType = "echo"
+	GET    CommandType = "get"
+	SET    CommandType = "set"
 	CONFIG CommandType = "config"
-	KEYS CommandType = "keys"
+	KEYS   CommandType = "keys"
 )
 
 type Command struct {
 	commandType CommandType
-	params []string
+	params      []string
 }
 
 var storage = map[string]string{}
@@ -95,12 +95,12 @@ func handleCommand(command Command) []byte {
 	case PING:
 		response = PongResponse
 	case ECHO:
-		response = generateResponse([]string { command.params[0] }, false)
+		response = generateResponse([]string{command.params[0]}, false)
 	case SET:
 		key := command.params[0]
 		if len(command.params) > 2 {
-			expireInMs, _ := strconv.Atoi(command.params[2]) 
-			time.AfterFunc(time.Duration(expireInMs) * time.Millisecond,  func() { delete(storage, key) })
+			expireInMs, _ := strconv.Atoi(command.params[2])
+			time.AfterFunc(time.Duration(expireInMs)*time.Millisecond, func() { delete(storage, key) })
 		}
 		storage[key] = command.params[1]
 		response = OkResponse
@@ -134,18 +134,21 @@ func getRdbKeys() string {
 
 func getKeyValue(command Command) string {
 	key := command.params[0]
-	if (DbFileName == "") {
+	if DbFileName == "" {
 		return getKeyFromMemory(key)
 	}
 	dbFilePath := fmt.Sprint(Dir, "/", DbFileName)
 	keyValue := rdb.GetKeyValue(dbFilePath, key)
-	return generateResponse([]string { keyValue }, false)
+	if keyValue == "" {
+		return NullBulkString
+	}
+	return generateResponse([]string{keyValue}, false)
 }
 
 func getKeyFromMemory(key string) string {
 	entry, ok := storage[key]
 	if ok {
-		return generateResponse([]string { entry }, false)
+		return generateResponse([]string{entry}, false)
 	} else {
 		return NullBulkString
 	}
@@ -161,18 +164,18 @@ func parseCommand(unparsedCommand string) Command {
 
 	switch strings.ToLower(lines[2]) {
 	case "echo":
-		return Command{commandType: ECHO, params: []string{ lines[4] }}
+		return Command{commandType: ECHO, params: []string{lines[4]}}
 	case "set":
 		if len(lines) > 8 {
-			return Command{commandType: SET, params: []string{ lines[4], lines[6], lines[10] }}
+			return Command{commandType: SET, params: []string{lines[4], lines[6], lines[10]}}
 		}
-		return Command{commandType: SET, params: []string{ lines[4], lines[6] }}
+		return Command{commandType: SET, params: []string{lines[4], lines[6]}}
 	case "get":
-		return Command{commandType: GET, params: []string{ lines[4] }}
+		return Command{commandType: GET, params: []string{lines[4]}}
 	case "config":
-		return Command{commandType: CONFIG, params: []string { lines[6] }}
+		return Command{commandType: CONFIG, params: []string{lines[6]}}
 	case "keys":
-		return Command{commandType: KEYS, params: []string { lines[4] }}
+		return Command{commandType: KEYS, params: []string{lines[4]}}
 	default:
 		return Command{}
 	}
