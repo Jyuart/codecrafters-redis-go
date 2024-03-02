@@ -24,34 +24,21 @@ func check(e error) {
 	}
 }
 
-func GetKeyValue(rdbFilePath string, key string) string {
+func GetKeyValue(rdbFilePath string, key string) (string, bool) {
 	fileData := parseFile(rdbFilePath)
 	keysLen := getKeysLen(fileData)
-	expiryKeysLen := getExpiryKeysLen(fileData)
 
-	firstKeyLenIdx := getKeysStartIdx(fileData)
-	for i := 0; i < expiryKeysLen; i++ {
-		keyValue, expired := parseExpiryKeyValue(fileData, firstKeyLenIdx)
-		if keyValue.key == key && expired {
-			return ""
-		}
-		if keyValue.key == key {
-			return keyValue.value
-		}
-
-	}
-
+	currIdx := getPairsStartIdx(fileData)
 	for i := 0; i < keysLen; i++ {
-		keyValue := parseKeyValue(fileData, firstKeyLenIdx)
+		keyValue, expired := parseKeyValue(fileData, currIdx)
 		if keyValue.key == key {
-			return keyValue.value
+			return keyValue.value, expired
 		}
 
-		// 3: key_len + value_len + encoding
-		firstKeyLenIdx += keyValue.totalLength + 3
+		currIdx += keyValue.totalLength + 3
 	}
 
-	return ""
+	return "", false
 }
 
 func GetKeys(rdbFilePath string) []string {
@@ -59,48 +46,60 @@ func GetKeys(rdbFilePath string) []string {
 	fileData := parseFile(rdbFilePath)
 	keysLen := getKeysLen(fileData)
 
-	firstKeyLenIdx := getKeysStartIdx(fileData)
-
+	currIdx := getPairsStartIdx(fileData)
 	for i := 0; i < keysLen; i++ {
-		keyValue := parseKeyValue(fileData, firstKeyLenIdx)
-		keys = append(keys, keyValue.key)
+		keyValue, expired := parseKeyValue(fileData, currIdx)
+		if !expired {
+			keys = append(keys, keyValue.key)
+		}
 
-		// 3: key_len + value_len + encoding
-		firstKeyLenIdx += keyValue.totalLength + 3
+		currIdx += keyValue.totalLength
 	}
 
 	return keys
 }
 
-func parseExpiryKeyValue(fileData []byte, currIdx int) (keyValue, bool) {
-	pairExpiryType := fileData[currIdx]
-	var expirationValueEndIdx int
+func parseKeyValue(fileData []byte, currIdx int) (keyValue, bool) {
+	firstByte := fileData[currIdx]
 	expired := false
-	if pairExpiryType == SECONDS_EXPIRY {
-		expirationValueEndIdx = currIdx + 4
-		expirationTime := binary.LittleEndian.Uint64(fileData[currIdx:expirationValueEndIdx])
-		if int64(expirationTime) < time.Now().Unix() {
-			expired = true
-		}
-	} else {
-		expirationValueEndIdx = currIdx + 8
-		expirationTime := binary.LittleEndian.Uint64(fileData[currIdx:expirationValueEndIdx])
-		if int64(expirationTime) < time.Now().UnixMilli() {
-			expired = true
+	var currIdxOffset int
+
+	if firstByte == SECONDS_EXPIRY || firstByte == MS_EXPIRY {
+		if firstByte == SECONDS_EXPIRY {
+			expirationTime := binary.LittleEndian.Uint64(fileData[currIdx+1 : currIdx+5])
+			if int64(expirationTime) < time.Now().Unix() {
+				expired = true
+				// expire type + 4 bytes for value
+				currIdxOffset = 5
+			}
+		} else {
+			expirationTime := binary.LittleEndian.Uint64(fileData[currIdx+1 : currIdx+9])
+			if int64(expirationTime) < time.Now().UnixMilli() {
+				expired = true
+				// expire type + 8 bytes for value
+				currIdxOffset = 9
+			}
 		}
 	}
-	keyValue := parseKeyValue(fileData, expirationValueEndIdx+1)
+
+	keyValue := parseKeyValueInner(fileData, currIdx+currIdxOffset)
+	keyValue.totalLength += currIdxOffset
 	return keyValue, expired
 }
 
-func parseKeyValue(fileData []byte, currIdx int) keyValue {
-	keyLen := int(fileData[currIdx])
-	keyEndIdx := currIdx + keyLen + 1
-	key := string(fileData[currIdx+1 : keyEndIdx])
+func parseKeyValueInner(fileData []byte, currIdx int) keyValue {
+	// 1 because currIdx points to encoding
+	keyLen := int(fileData[currIdx+1])
+	// 1 to skip encoding, 1 to include key ending
+	keyEndIdx := currIdx + 1 + keyLen + 1
+	// 2 to skip encoding and len
+	key := string(fileData[currIdx+2 : keyEndIdx])
 
 	valueLen := int(fileData[keyEndIdx])
 	value := string(fileData[keyEndIdx+1 : keyEndIdx+1+valueLen])
-	return keyValue{key, value, len(key) + len(value)}
+
+	// 3 for encoding, key len, value len
+	return keyValue{key, value, len(key) + len(value) + 3}
 }
 
 // 1: -> The next byte after the resize db op code
@@ -114,8 +113,8 @@ func getExpiryKeysLen(fileData []byte) int {
 }
 
 // 4: keys_len + expire_keys_len + encoding_type + first_key_len
-func getKeysStartIdx(fileData []byte) int {
-	return getOpCodeIdx(fileData, RESIZE_DB) + 4
+func getPairsStartIdx(fileData []byte) int {
+	return getOpCodeIdx(fileData, RESIZE_DB) + 3
 }
 
 func getOpCodeIdx(fileData []byte, opCode byte) int {

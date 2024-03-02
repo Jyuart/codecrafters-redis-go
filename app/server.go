@@ -138,8 +138,8 @@ func getKeyValue(command Command) string {
 		return getKeyFromMemory(key)
 	}
 	dbFilePath := fmt.Sprint(Dir, "/", DbFileName)
-	keyValue := rdb.GetKeyValue(dbFilePath, key)
-	if keyValue == "" {
+	keyValue, expired := rdb.GetKeyValue(dbFilePath, key)
+	if expired {
 		return NullBulkString
 	}
 	return generateResponse([]string{keyValue}, false)
