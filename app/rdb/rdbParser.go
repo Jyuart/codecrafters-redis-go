@@ -3,7 +3,6 @@ package rdb
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"os"
 	"time"
 )
