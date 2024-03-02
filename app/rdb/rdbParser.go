@@ -35,7 +35,7 @@ func GetKeyValue(rdbFilePath string, key string) (string, bool) {
 			return keyValue.value, expired
 		}
 
-		currIdx += keyValue.totalLength + 3
+		currIdx += keyValue.totalLength
 	}
 
 	return "", false
