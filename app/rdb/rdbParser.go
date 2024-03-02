@@ -3,6 +3,7 @@ package rdb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"time"
 )
@@ -64,21 +65,19 @@ func parseKeyValue(fileData []byte, currIdx int) (keyValue, bool) {
 	expired := false
 	var currIdxOffset int
 
-	if firstByte == SECONDS_EXPIRY || firstByte == MS_EXPIRY {
-		if firstByte == SECONDS_EXPIRY {
-			expirationTime := binary.LittleEndian.Uint64(fileData[currIdx+1 : currIdx+5])
-			if int64(expirationTime) < time.Now().Unix() {
-				expired = true
-				// expire type + 4 bytes for value
-				currIdxOffset = 5
-			}
-		} else {
-			expirationTime := binary.LittleEndian.Uint64(fileData[currIdx+1 : currIdx+9])
-			if int64(expirationTime) < time.Now().UnixMilli() {
-				expired = true
-				// expire type + 8 bytes for value
-				currIdxOffset = 9
-			}
+	if firstByte == SECONDS_EXPIRY {
+		expirationTime := binary.LittleEndian.Uint64(fileData[currIdx+1 : currIdx+5])
+		// expire type + 4 bytes for value
+		currIdxOffset = 5
+		if int64(expirationTime) < time.Now().Unix() {
+			expired = true
+		}
+	} else if firstByte == MS_EXPIRY {
+		expirationTime := binary.LittleEndian.Uint64(fileData[currIdx+1 : currIdx+9])
+		// expire type + 8 bytes for value
+		currIdxOffset = 9
+		if int64(expirationTime) < time.Now().UnixMilli() {
+			expired = true
 		}
 	}
 
@@ -94,6 +93,8 @@ func parseKeyValueInner(fileData []byte, currIdx int) keyValue {
 	keyEndIdx := currIdx + 1 + keyLen + 1
 	// 2 to skip encoding and len
 	key := string(fileData[currIdx+2 : keyEndIdx])
+
+	println(key)
 
 	valueLen := int(fileData[keyEndIdx])
 	value := string(fileData[keyEndIdx+1 : keyEndIdx+1+valueLen])
