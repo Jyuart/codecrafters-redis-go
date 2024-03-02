@@ -2,8 +2,8 @@ package rdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -11,6 +11,12 @@ const RESIZE_DB = 0xFB
 const DB_END = 0xFF
 const SECONDS_EXPIRY = 0xFD
 const MS_EXPIRY = 0xFC
+
+type keyValue struct {
+	key         string
+	value       string
+	totalLength int
+}
 
 func check(e error) {
 	if e != nil {
@@ -25,24 +31,24 @@ func GetKeyValue(rdbFilePath string, key string) string {
 
 	firstKeyLenIdx := getKeysStartIdx(fileData)
 	for i := 0; i < expiryKeysLen; i++ {
-		currentKey, value, expired := parseExpiryKeyValue(fileData, firstKeyLenIdx)
-		if currentKey == key && expired {
+		keyValue, expired := parseExpiryKeyValue(fileData, firstKeyLenIdx)
+		if keyValue.key == key && expired {
 			return ""
 		}
-		if currentKey == key {
-			return value
+		if keyValue.key == key {
+			return keyValue.value
 		}
 
 	}
 
 	for i := 0; i < keysLen; i++ {
-		currentKey, value := parseKeyValue(fileData, firstKeyLenIdx)
-		if currentKey == key {
-			return value
+		keyValue := parseKeyValue(fileData, firstKeyLenIdx)
+		if keyValue.key == key {
+			return keyValue.value
 		}
 
 		// 3: key_len + value_len + encoding
-		firstKeyLenIdx += len(currentKey) + len(value) + 3
+		firstKeyLenIdx += keyValue.totalLength + 3
 	}
 
 	return ""
@@ -56,45 +62,45 @@ func GetKeys(rdbFilePath string) []string {
 	firstKeyLenIdx := getKeysStartIdx(fileData)
 
 	for i := 0; i < keysLen; i++ {
-		key, value := parseKeyValue(fileData, firstKeyLenIdx)
-		keys = append(keys, key)
+		keyValue := parseKeyValue(fileData, firstKeyLenIdx)
+		keys = append(keys, keyValue.key)
 
 		// 3: key_len + value_len + encoding
-		firstKeyLenIdx += len(key) + len(value) + 3
+		firstKeyLenIdx += keyValue.totalLength + 3
 	}
 
 	return keys
 }
 
-func parseExpiryKeyValue(fileData []byte, currIdx int) (string, string, bool) {
+func parseExpiryKeyValue(fileData []byte, currIdx int) (keyValue, bool) {
 	pairExpiryType := fileData[currIdx]
 	var expirationValueEndIdx int
 	expired := false
 	if pairExpiryType == SECONDS_EXPIRY {
-		expirationValueEndIdx = currIdx + 1 + 4
-		expirationTime, _ := strconv.Atoi(string(fileData[pairExpiryType+1 : expirationValueEndIdx]))
+		expirationValueEndIdx = currIdx + 4
+		expirationTime := binary.LittleEndian.Uint64(fileData[currIdx:expirationValueEndIdx])
 		if int64(expirationTime) < time.Now().Unix() {
 			expired = true
 		}
 	} else {
-		expirationValueEndIdx = currIdx + 1 + 8
-		expirationTime, _ := strconv.Atoi(string(fileData[pairExpiryType+1 : expirationValueEndIdx]))
+		expirationValueEndIdx = currIdx + 8
+		expirationTime := binary.LittleEndian.Uint64(fileData[currIdx:expirationValueEndIdx])
 		if int64(expirationTime) < time.Now().UnixMilli() {
 			expired = true
 		}
 	}
-	key, value := parseKeyValue(fileData, expirationValueEndIdx)
-	return key, value, expired
+	keyValue := parseKeyValue(fileData, expirationValueEndIdx+1)
+	return keyValue, expired
 }
 
-func parseKeyValue(fileData []byte, currIdx int) (string, string) {
+func parseKeyValue(fileData []byte, currIdx int) keyValue {
 	keyLen := int(fileData[currIdx])
 	keyEndIdx := currIdx + keyLen + 1
 	key := string(fileData[currIdx+1 : keyEndIdx])
 
 	valueLen := int(fileData[keyEndIdx])
 	value := string(fileData[keyEndIdx+1 : keyEndIdx+1+valueLen])
-	return key, value
+	return keyValue{key, value, len(key) + len(value)}
 }
 
 // 1: -> The next byte after the resize db op code
